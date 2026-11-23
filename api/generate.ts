@@ -1,4 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+declare const process: {
+  env: {
+    VITE_SUPABASE_URL?: string;
+    VITE_SUPABASE_ANON_KEY?: string;
+    OPENAI_API_KEY?: string;
+  };
+};
 
 const allowedTools = [
   "pdf_summarizer",
