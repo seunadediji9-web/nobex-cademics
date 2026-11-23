@@ -1,4 +1,5 @@
 
+
 import { createClient } from "@supabase/supabase-js";
 
 declare const process: {
@@ -19,6 +20,9 @@ const allowedTools = [
   "ai_motion_lessons",
   "ai_tutor",
 ];
+
+const wait = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
@@ -93,68 +97,90 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Reserve one free trial for this authenticated student.
-    const { data: remaining, error: trialError } =
-      await supabase.rpc("reserve_feature_trial", {
-        p_feature_key: tool,
-      });
+    const geminiUrl =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
-    if (trialError) {
-      return res.status(403).json({
-        error: trialError.message.includes(
-          "No free trials remaining"
-        )
-          ? "You have used all your free trials for this feature."
-          : "Unable to verify your free trial. Please try again.",
-      });
-    }
-
-    // Connect to Gemini 3.8 Flash.
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": geminiKey,
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  "You are Nobex Cademics, a professional academic learning assistant. Help university students understand difficult subjects. Explain concepts accurately, clearly and in simple student-friendly language. Use headings, examples and step-by-step explanations where appropriate. Give educational answers and maintain academic accuracy.",
-              },
-            ],
+    const requestBody = {
+      systemInstruction: {
+        parts: [
+          {
+            text:
+              "You are Nobex Cademics, a professional academic learning assistant. Help university students understand difficult subjects. Explain concepts accurately, clearly and in simple student-friendly language. Use headings, examples and step-by-step explanations where appropriate. Give educational answers and maintain academic accuracy.",
           },
-          contents: [
+        ],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [
             {
-              role: "user",
-              parts: [
-                {
-                  text: `Academic tool: ${tool}\n\n${prompt}`,
-                },
-              ],
+              text: `Academic tool: ${tool}\n\n${prompt}`,
             },
           ],
-          generationConfig: {
-            maxOutputTokens: 2000,
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 2000,
+      },
+    };
+
+    let response: Response | null = null;
+    let data: any = null;
+
+    // Retry temporary Gemini errors up to 3 times.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        response = await fetch(geminiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": geminiKey,
           },
-        }),
+          body: JSON.stringify(requestBody),
+        });
+
+        data = await response.json();
+
+        if (response.ok) {
+          break;
+        }
+
+        const retryableStatuses = [
+          429, 500, 502, 503, 504,
+        ];
+
+        if (
+          !retryableStatuses.includes(response.status) ||
+          attempt === 3
+        ) {
+          break;
+        }
+
+        console.warn(
+          `Gemini temporary error ${response.status}. Retry ${attempt + 1}/3.`
+        );
+
+        await wait(1000 * Math.pow(2, attempt));
+      } catch (error) {
+        console.error("Gemini connection error:", error);
+
+        if (attempt === 3) {
+          throw error;
+        }
+
+        await wait(1000 * Math.pow(2, attempt));
       }
-    );
+    }
 
-    const data = await response.json();
-
-    if (!response.ok) {
+    if (!response || !response.ok) {
       console.error("Gemini API error:", {
-        status: response.status,
-        error: data.error || data,
+        status: response?.status,
+        error: data?.error || data,
       });
 
       return res.status(502).json({
         error:
-          "The AI service could not complete your request. Please try again.",
+          "The AI service is temporarily busy. Please try again shortly.",
       });
     }
 
@@ -173,6 +199,22 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // Reserve a free trial only after Gemini succeeds.
+    const { data: remaining, error: trialError } =
+      await supabase.rpc("reserve_feature_trial", {
+        p_feature_key: tool,
+      });
+
+    if (trialError) {
+      return res.status(403).json({
+        error: trialError.message.includes(
+          "No free trials remaining"
+        )
+          ? "You have used all your free trials for this feature."
+          : "Unable to verify your free trial. Please try again.",
+      });
+    }
+
     return res.status(200).json({
       answer,
       trials_remaining: remaining,
@@ -185,5 +227,4 @@ export default async function handler(req: any, res: any) {
       error: "Something went wrong. Please try again.",
     });
   }
-      }
-          
+}
