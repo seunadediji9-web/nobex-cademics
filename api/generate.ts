@@ -109,8 +109,9 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // Connect to Gemini 3.8 Flash.
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
       {
         method: "POST",
         headers: {
@@ -122,7 +123,7 @@ export default async function handler(req: any, res: any) {
             parts: [
               {
                 text:
-                  "You are Nobex Cademics, a helpful academic learning assistant. Explain concepts clearly, accurately, and in student-friendly language. Use structured headings and examples where helpful.",
+                  "You are Nobex Cademics, a professional academic learning assistant. Help university students understand difficult subjects. Explain concepts accurately, clearly and in simple student-friendly language. Use headings, examples and step-by-step explanations where appropriate. Give educational answers and maintain academic accuracy.",
               },
             ],
           },
@@ -146,7 +147,10 @@ export default async function handler(req: any, res: any) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini API error:", data);
+      console.error("Gemini API error:", {
+        status: response.status,
+        error: data.error || data,
+      });
 
       return res.status(502).json({
         error:
@@ -162,6 +166,8 @@ export default async function handler(req: any, res: any) {
       .trim();
 
     if (!answer) {
+      console.error("Gemini returned no text:", data);
+
       return res.status(502).json({
         error: "The AI service returned an empty response.",
       });
@@ -179,4 +185,5 @@ export default async function handler(req: any, res: any) {
       error: "Something went wrong. Please try again.",
     });
   }
-}
+      }
+          
