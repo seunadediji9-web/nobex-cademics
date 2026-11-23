@@ -557,6 +557,297 @@ export default function App() {
               </div>
             </>
 
+          )}
+          
+          {active === "Subscriptions" && (
+            <>
+              <SectionTitle
+                title="Choose your study plan"
+                subtitle="Find the plan that supports your learning journey."
+              />
+              <div className="plan-grid">
+                {plans.map((plan) => (
+                  <div
+                    className={`plan-card ${plan.featured ? "featured" : ""}`}
+                    key={plan.name}
+                  >
+                    <h3>{plan.name}</h3>
+                    <h2>{plan.price}<small>/month</small></h2>
+                    <p>{plan.desc}</p>
+                    <ul>
+                      {plan.points.map((point) => (
+                        <li key={point}>
+                          <Check size={16} /> {point}
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      className="gold-button"
+                      onClick={() =>
+                        alert("Subscription payment will be connected soon.")
+                      }
+                    >
+                      {plan.name === "Free" ? "Current plan" : "Choose plan"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function Brand() {
+  return (
+    <div className="brand">
+      <div className="brand-icon"><GraduationCap size={25} /></div>
+      <div>
+        <strong>NOBEX</strong>
+        <span>CADEMICS</span>
+      </div>
+    </div>
+  );
+}
+
+function SectionTitle({
+  title,
+  subtitle,
+  action,
+  onAction
+}: {
+  title: string;
+  subtitle: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="section-title">
+      <div>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+      {action && (
+        <button className="text-button" onClick={onAction}>
+          {action} <ArrowRight size={15} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+  note
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  note: string;
+}) {
+  return (
+    <div className="stat-card">
+      <div className="stat-icon">{icon}</div>
+      <span>{label}</span>
+      <h2>{value}</h2>
+      <small>{note}</small>
+    </div>
+  );
+}
+
+function FeatureGrid({
+  usage,
+  detailed = false,
+  onSelect
+}: {
+  usage: Usage[];
+  detailed?: boolean;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <div className={`feature-grid ${detailed ? "detailed" : ""}`}>
+      {features.map((feature) => {
+        const Icon = feature.icon;
+        const balance =
+          usage.find((item) => item.feature_key === feature.key)
+            ?.trials_remaining ?? 4;
+
+        return (
+          <button
+            type="button"
+            className="feature-card"
+            key={feature.key}
+            onClick={() => onSelect(feature.key)}
+          >
+            <div className="feature-icon">
+              <Icon size={23} />
+            </div>
+            <span className="feature-tag">{feature.tag}</span>
+            <h3>{feature.name}</h3>
+            <p>{feature.detail}</p>
+            <div className="feature-footer">
+              <span>{balance} free trials left</span>
+              <ArrowRight size={17} />
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DocumentList({
+  docs,
+  onOpen
+}: {
+  docs: StudyDoc[];
+  onOpen: (doc: StudyDoc) => void;
+}) {
+  if (docs.length === 0) {
+    return (
+      <div className="empty-state">
+        <FileText size={32} />
+        <h3>No study documents yet</h3>
+        <p>Upload your first PDF to start building your study library.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="document-list">
+      {docs.map((doc) => (
+        <button
+          className="document-row"
+          key={doc.id}
+          onClick={() => onOpen(doc)}
+        >
+          <div className="document-icon"><FileText size={21} /></div>
+          <div className="document-info">
+            <strong>{doc.file_name}</strong>
+            <small>
+              {new Date(doc.created_at).toLocaleDateString()}
+            </small>
+          </div>
+          <ArrowRight size={18} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AuthScreen({
+  mode,
+  setMode,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  fullName,
+  setFullName,
+  onSubmit,
+  busy,
+  message,
+  configured
+}: {
+  mode: "login" | "signup";
+  setMode: (mode: "login" | "signup") => void;
+  email: string;
+  setEmail: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  fullName: string;
+  setFullName: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  busy: boolean;
+  message: string;
+  configured: boolean;
+}) {
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <Brand />
+        <h1>{mode === "signup" ? "Create your account" : "Welcome back"}</h1>
+        <p>Your personal academic learning workspace.</p>
+
+        {!configured && (
+          <div className="inline-message">
+            Supabase is not configured. Please check your project settings.
+          </div>
+        )}
+
+        <form onSubmit={onSubmit}>
+          {mode === "signup" && (
+            <label>
+              Full name
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
+            </label>
+          )}
+
+          <label>
+            Email address
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              minLength={6}
+              required
+            />
+          </label>
+
+          <button
+            className="gold-button"
+            type="submit"
+            disabled={busy || !configured}
+          >
+            {busy
+              ? "Please wait..."
+              : mode === "signup"
+                ? "Create account"
+                : "Sign in"}
+          </button>
+        </form>
+
+        {message && <div className="inline-message">{message}</div>}
+
+        <div className="auth-switch">
+          {mode === "signup"
+            ? "Already have an account?"
+            : "Don't have an account?"}
+          <button
+            type="button"
+            onClick={() =>
+              setMode(mode === "signup" ? "login" : "signup")
+            }
+          >
+            {mode === "signup" ? "Sign in" : "Create account"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+                }
+                                       
   
 
   
