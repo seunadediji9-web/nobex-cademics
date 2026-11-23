@@ -1,9 +1,11 @@
+
 import { createClient } from "@supabase/supabase-js";
+
 declare const process: {
   env: {
     VITE_SUPABASE_URL?: string;
     VITE_SUPABASE_ANON_KEY?: string;
-    OPENAI_API_KEY?: string;
+    GEMINI_API_KEY?: string;
   };
 };
 
@@ -20,21 +22,24 @@ const allowedTools = [
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
 
-    if (!supabaseUrl || !supabaseKey || !openaiKey) {
+    if (!supabaseUrl || !supabaseKey || !geminiKey) {
       return res.status(500).json({
         error: "Server configuration is incomplete",
       });
     }
 
     const authorization = req.headers.authorization || "";
+
     const token = authorization.startsWith("Bearer ")
       ? authorization.slice(7)
       : "";
@@ -45,17 +50,21 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseKey,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
 
     const { data: userData, error: authError } =
       await supabase.auth.getUser(token);
@@ -92,26 +101,44 @@ export default async function handler(req: any, res: any) {
 
     if (trialError) {
       return res.status(403).json({
-        error: trialError.message.includes("No free trials remaining")
+        error: trialError.message.includes(
+          "No free trials remaining"
+        )
           ? "You have used all your free trials for this feature."
           : "Unable to verify your free trial. Please try again.",
       });
     }
 
     const response = await fetch(
-      "https://api.openai.com/v1/responses",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiKey}`,
+          "x-goog-api-key": geminiKey,
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          instructions:
-            "You are Nobex Cademics, a helpful academic learning assistant. Explain concepts clearly, accurately, and in student-friendly language.",
-          input: `Academic tool: ${tool}\n\n${prompt}`,
-          max_output_tokens: 2000,
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  "You are Nobex Cademics, a helpful academic learning assistant. Explain concepts clearly, accurately, and in student-friendly language. Use structured headings and examples where helpful.",
+              },
+            ],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `Academic tool: ${tool}\n\n${prompt}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 2000,
+          },
         }),
       }
     );
@@ -119,16 +146,20 @@ export default async function handler(req: any, res: any) {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("Gemini API error:", data);
+
       return res.status(502).json({
-        error: "The AI service could not complete your request. Please try again.",
+        error:
+          "The AI service could not complete your request. Please try again.",
       });
     }
 
-    const answer = (data.output || [])
-      .flatMap((item: any) => item.content || [])
-      .filter((item: any) => item.type === "output_text")
-      .map((item: any) => item.text)
-      .join("\n");
+    const answer = (
+      data.candidates?.[0]?.content?.parts || []
+    )
+      .map((part: any) => part.text || "")
+      .join("\n")
+      .trim();
 
     if (!answer) {
       return res.status(502).json({
@@ -140,10 +171,12 @@ export default async function handler(req: any, res: any) {
       answer,
       trials_remaining: remaining,
     });
+
   } catch (error) {
+    console.error("AI generation error:", error);
+
     return res.status(500).json({
       error: "Something went wrong. Please try again.",
     });
   }
-  }
-      
+}
